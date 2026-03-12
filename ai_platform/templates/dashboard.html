@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — TrainHire{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Dashboard</h1>
+</div>
+
+<div id="dashboard-content">
+  <p class="loading">Loading dashboard…</p>
+</div>
+
+<!-- Post job modal (company) -->
+<div id="post-job-modal" class="modal-backdrop" style="display:none">
+  <div class="modal modal-wide">
+    <h2>Post a Job</h2>
+    <div id="post-job-error" class="error-msg" style="display:none"></div>
+    <label>Title
+      <input type="text" id="pj-title" placeholder="e.g. RLHF Feedback Specialist" />
+    </label>
+    <label>Category
+      <select id="pj-category">
+        {% for cat in JOB_CATEGORIES %}
+        <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Description
+      <textarea id="pj-desc" rows="5" placeholder="Describe the role, tasks, and requirements…"></textarea>
+    </label>
+    <label>Required Skills (comma-separated)
+      <input type="text" id="pj-skills" placeholder="Python, NLP, RLHF" />
+    </label>
+    <div class="form-row">
+      <label>Pay Rate ($/hr)
+        <input type="number" id="pj-pay" min="0" step="0.5" />
+      </label>
+      <label>Min Experience (years)
+        <input type="number" id="pj-exp" min="0" step="1" value="0" />
+      </label>
+    </div>
+    <label class="checkbox-label">
+      <input type="checkbox" id="pj-remote" checked /> Remote
+    </label>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="postJob()">Post Job</button>
+      <button class="btn btn-ghost" onclick="closeModal('post-job-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assessment modal (professional) -->
+<div id="assessment-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <h2>Add Skill Assessment</h2>
+    <div id="assessment-error" class="error-msg" style="display:none"></div>
+    <label>Skill
+      <select id="assess-skill">
+        {% for skill in SKILLS %}
+        <option value="{{ skill }}">{{ skill }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Score (0–100)
+      <input type="number" id="assess-score" min="0" max="100" step="1" />
+    </label>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="submitAssessment()">Save Score</button>
+      <button class="btn btn-ghost" onclick="closeModal('assessment-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadDashboard() {
+  const meRes = await fetch('/api/auth/me');
+  if (!meRes.ok) {
+    document.getElementById('dashboard-content').innerHTML =
+      '<p>You must be <a href="#" onclick="openModal(\'login-modal\')">logged in</a> to view your dashboard.</p>';
+    return;
+  }
+  const me = await meRes.json();
+  if (me.role === 'company') renderCompanyDashboard(me);
+  else if (me.role === 'professional') renderProfessionalDashboard(me);
+}
+
+async function renderCompanyDashboard(me) {
+  const jobs = await fetch('/api/companies/me/jobs').then(r => r.json());
+  const el = document.getElementById('dashboard-content');
+  el.innerHTML = `
+    <div class="dashboard-header">
+      <div>
+        <h2>${escHtml(me.profile?.name || me.email)}</h2>
+        <span class="badge">Company</span>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('post-job-modal')">+ Post Job</button>
+    </div>
+    <div class="dashboard-section">
+      <h3>Your Job Postings (${Array.isArray(jobs) ? jobs.length : 0})</h3>
+      <div id="company-jobs">
+        ${!Array.isArray(jobs) || !jobs.length
+          ? '<p class="empty">No jobs posted yet. Post your first job above!</p>'
+          : jobs.map(renderCompanyJob).join('')}
+      </div>
+    </div>`;
+}
+
+function renderCompanyJob(j) {
+  return `
+  <div class="job-card">
+    <div class="job-card-header">
+      <div>
+        <h4 class="job-title">${escHtml(j.title)}</h4>
+        <span class="company-name">${escHtml(j.category)}</span>
+      </div>
+      <span class="badge ${j.status === 'open' ? 'badge-green' : ''}">${j.status}</span>
+    </div>
+    <div class="job-meta">
+      <span>💰 $${j.pay_rate}/hr</span>
+      <span>📋 ${j.application_count} applicant${j.application_count !== 1 ? 's' : ''}</span>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="viewApplications(${j.id}, '${escHtml(j.title)}')">View Applications</button>
+    <button class="btn btn-ghost btn-sm" onclick="closeJob(${j.id})">Close Job</button>
+  </div>`;
+}
+
+async function renderProfessionalDashboard(me) {
+  const apps = await fetch('/api/applications/mine').then(r => r.json());
+  const el = document.getElementById('dashboard-content');
+  const profile = me.profile || {};
+
+  const skillsDisplay = (profile.skills || []).map(s => `<span class="score-chip">${escHtml(s)}</span>`).join('');
+
+  el.innerHTML = `
+    <div class="dashboard-header">
+      <div>
+        <h2>${escHtml(profile.name || me.email)}</h2>
+        <span class="badge">${escHtml(profile.availability || 'unknown')}</span>
+      </div>
+      <button class="btn btn-outline" onclick="openModal('assessment-modal')">+ Add Assessment</button>
+    </div>
+    <div class="profile-summary">
+      <p>${escHtml(profile.bio || 'No bio yet.')}</p>
+      <div>${skillsDisplay}</div>
+      <div class="job-meta" style="margin-top:.5rem">
+        <span>💰 $${profile.hourly_rate || 0}/hr</span>
+        <span>📅 ${profile.experience_years || 0} yrs experience</span>
+      </div>
+    </div>
+    <div class="dashboard-section">
+      <h3>My Applications (${Array.isArray(apps) ? apps.length : 0})</h3>
+      <div id="pro-apps">
+        ${!Array.isArray(apps) || !apps.length
+          ? '<p class="empty">No applications yet. <a href="/jobs">Browse jobs</a> to get started!</p>'
+          : apps.map(renderApp).join('')}
+      </div>
+    </div>`;
+}
+
+function renderApp(a) {
+  const statusClass = { accepted: 'badge-green', rejected: 'badge-red', reviewing: 'badge-yellow' }[a.status] || '';
+  return `
+  <div class="job-card">
+    <div class="job-card-header">
+      <h4 class="job-title">${escHtml(a.job_title || 'Job')}</h4>
+      <span class="badge ${statusClass}">${a.status}</span>
+    </div>
+    <div class="job-meta">
+      ${a.proposed_rate ? `<span>💰 $${a.proposed_rate}/hr proposed</span>` : ''}
+      <span>📅 Applied ${new Date(a.created_at).toLocaleDateString()}</span>
+    </div>
+  </div>`;
+}
+
+async function viewApplications(jobId, title) {
+  const apps = await fetch(`/api/applications/job/${jobId}`).then(r => r.json());
+  const html = !apps.length
+    ? '<p class="empty">No applications yet.</p>'
+    : apps.map(a => `
+      <div class="job-card">
+        <div class="job-card-header">
+          <h4>${escHtml(a.professional_name || 'Applicant')}</h4>
+          <span class="badge">${a.status}</span>
+        </div>
+        ${a.proposed_rate ? `<div class="job-meta"><span>💰 $${a.proposed_rate}/hr</span></div>` : ''}
+        <p>${escHtml((a.cover_letter || '').slice(0, 300))}</p>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="updateAppStatus(${a.id}, 'accepted')">Accept</button>
+          <button class="btn btn-ghost btn-sm" onclick="updateAppStatus(${a.id}, 'reviewing')">Reviewing</button>
+          <button class="btn btn-outline btn-sm" onclick="updateAppStatus(${a.id}, 'rejected')">Reject</button>
+        </div>
+      </div>`).join('');
+  alert(`Applications for "${title}":\n\nUse the dashboard to manage them (full UI shown below).`);
+  document.getElementById('dashboard-content').insertAdjacentHTML('beforeend',
+    `<div class="dashboard-section"><h3>Applications for "${escHtml(title)}"</h3>${html}</div>`);
+}
+
+async function updateAppStatus(appId, status) {
+  const res = await fetch(`/api/applications/${appId}/status`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ status })
+  });
+  if (res.ok) loadDashboard();
+  else alert('Error updating status');
+}
+
+async function closeJob(jobId) {
+  if (!confirm('Close this job posting?')) return;
+  await fetch(`/api/jobs/${jobId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ status: 'closed' })
+  });
+  loadDashboard();
+}
+
+async function postJob() {
+  const errEl = document.getElementById('post-job-error');
+  errEl.style.display = 'none';
+  const skillsRaw = document.getElementById('pj-skills').value;
+  const skills = skillsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const body = {
+    title:                document.getElementById('pj-title').value,
+    category:             document.getElementById('pj-category').value,
+    description:          document.getElementById('pj-desc').value,
+    required_skills:      skills,
+    pay_rate:             parseFloat(document.getElementById('pj-pay').value) || 0,
+    min_experience_years: parseInt(document.getElementById('pj-exp').value) || 0,
+    remote:               document.getElementById('pj-remote').checked,
+  };
+  const res = await fetch('/api/jobs/', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    errEl.textContent = data.error || 'Error posting job.';
+    errEl.style.display = 'block';
+    return;
+  }
+  closeModal('post-job-modal');
+  loadDashboard();
+}
+
+async function submitAssessment() {
+  const errEl = document.getElementById('assessment-error');
+  errEl.style.display = 'none';
+  const body = {
+    skill: document.getElementById('assess-skill').value,
+    score: parseFloat(document.getElementById('assess-score').value),
+  };
+  const res = await fetch('/api/professionals/me/assessments', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    errEl.textContent = data.error || 'Error saving assessment.';
+    errEl.style.display = 'block';
+    return;
+  }
+  closeModal('assessment-modal');
+  loadDashboard();
+}
+
+loadDashboard();
+</script>
+{% endblock %}

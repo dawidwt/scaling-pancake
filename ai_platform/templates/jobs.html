@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Browse Jobs — TrainHire{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>AI Training Jobs</h1>
+  <p>Find your next data annotation, RLHF, or model evaluation project.</p>
+</div>
+
+<div class="layout-two-col">
+  <!-- Filters -->
+  <aside class="filters-panel">
+    <h3>Filters</h3>
+    <label>Category
+      <select id="f-category">
+        <option value="">All categories</option>
+        {% for cat in JOB_CATEGORIES %}
+        <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Skill keyword
+      <input type="text" id="f-skill" placeholder="e.g. Python" />
+    </label>
+    <label>Min pay ($/hr)
+      <input type="number" id="f-min-pay" min="0" step="1" />
+    </label>
+    <label>Max pay ($/hr)
+      <input type="number" id="f-max-pay" min="0" step="1" />
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" id="f-remote" /> Remote only
+    </label>
+    <button class="btn btn-primary full-width" onclick="loadJobs()">Apply Filters</button>
+  </aside>
+
+  <!-- Job list -->
+  <section class="job-list" id="job-list">
+    <p class="loading">Loading jobs…</p>
+  </section>
+</div>
+
+<!-- Apply modal -->
+<div id="apply-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <h2 id="apply-modal-title">Apply</h2>
+    <div id="apply-error" class="error-msg" style="display:none"></div>
+    <label>Cover Letter
+      <textarea id="apply-cover" rows="5" placeholder="Tell us about your relevant experience…"></textarea>
+    </label>
+    <label>Proposed Rate ($/hr, optional)
+      <input type="number" id="apply-rate" min="0" step="0.5" />
+    </label>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="submitApplication()">Submit Application</button>
+      <button class="btn btn-ghost" onclick="closeModal('apply-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentJobId = null;
+
+async function loadJobs() {
+  const category = encodeURIComponent(document.getElementById('f-category').value);
+  const skill    = encodeURIComponent(document.getElementById('f-skill').value);
+  const minPay   = document.getElementById('f-min-pay').value;
+  const maxPay   = document.getElementById('f-max-pay').value;
+  const remote   = document.getElementById('f-remote').checked;
+
+  let url = `/api/jobs/?status=open`;
+  if (category) url += `&category=${category}`;
+  if (skill)    url += `&skill=${skill}`;
+  if (minPay)   url += `&min_pay=${minPay}`;
+  if (maxPay)   url += `&max_pay=${maxPay}`;
+  if (remote)   url += `&remote_only=true`;
+
+  const list = document.getElementById('job-list');
+  list.innerHTML = '<p class="loading">Loading…</p>';
+  try {
+    const jobs = await fetch(url).then(r => r.json());
+    if (!jobs.length) { list.innerHTML = '<p class="empty">No jobs found matching your filters.</p>'; return; }
+    list.innerHTML = jobs.map(renderJob).join('');
+  } catch {
+    list.innerHTML = '<p class="error-msg">Failed to load jobs.</p>';
+  }
+}
+
+function renderJob(j) {
+  return `
+  <div class="job-card">
+    <div class="job-card-header">
+      <div>
+        <h3 class="job-title">${escHtml(j.title)}</h3>
+        <span class="company-name">${escHtml(j.company_name || '')}</span>
+      </div>
+      <span class="badge">${escHtml(j.category)}</span>
+    </div>
+    <p class="job-desc">${escHtml(j.description.slice(0, 200))}${j.description.length > 200 ? '…' : ''}</p>
+    <div class="job-meta">
+      <span>💰 $${j.pay_rate}/${j.pay_type === 'fixed' ? 'fixed' : 'hr'}</span>
+      ${j.remote ? '<span>🌐 Remote</span>' : ''}
+      <span>📋 ${j.application_count} applicant${j.application_count !== 1 ? 's' : ''}</span>
+      ${j.required_skills.length ? `<span>🛠 ${j.required_skills.slice(0,3).map(escHtml).join(', ')}</span>` : ''}
+    </div>
+    <button class="btn btn-primary" onclick="openApply(${j.id}, '${escHtml(j.title)}')">Apply Now</button>
+  </div>`;
+}
+
+function openApply(jobId, title) {
+  currentJobId = jobId;
+  document.getElementById('apply-modal-title').textContent = `Apply — ${title}`;
+  document.getElementById('apply-cover').value = '';
+  document.getElementById('apply-rate').value = '';
+  document.getElementById('apply-error').style.display = 'none';
+  openModal('apply-modal');
+}
+
+async function submitApplication() {
+  const errEl = document.getElementById('apply-error');
+  errEl.style.display = 'none';
+
+  const body = {
+    job_id: currentJobId,
+    cover_letter: document.getElementById('apply-cover').value,
+  };
+  const rate = document.getElementById('apply-rate').value;
+  if (rate) body.proposed_rate = parseFloat(rate);
+
+  const res = await fetch('/api/applications/', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    errEl.textContent = data.error || 'Error submitting application.';
+    errEl.style.display = 'block';
+    return;
+  }
+  closeModal('apply-modal');
+  alert('Application submitted!');
+}
+
+// Pre-select category from URL param
+const urlParams = new URLSearchParams(window.location.search);
+const urlCat = urlParams.get('category');
+if (urlCat) document.getElementById('f-category').value = urlCat;
+
+loadJobs();
+</script>
+{% endblock %}

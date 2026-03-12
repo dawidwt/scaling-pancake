@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Find Talent — TrainHire{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>AI Training Professionals</h1>
+  <p>Browse vetted annotators, evaluators, and domain experts ready to train your model.</p>
+</div>
+
+<div class="layout-two-col">
+  <aside class="filters-panel">
+    <h3>Filters</h3>
+    <label>Skill keyword
+      <input type="text" id="f-skill" placeholder="e.g. RLHF" />
+    </label>
+    <label>Availability
+      <select id="f-availability">
+        <option value="">Any</option>
+        <option value="available">Available</option>
+        <option value="busy">Busy</option>
+      </select>
+    </label>
+    <label>Min experience (years)
+      <input type="number" id="f-min-exp" min="0" step="1" />
+    </label>
+    <label>Max rate ($/hr)
+      <input type="number" id="f-max-rate" min="0" step="1" />
+    </label>
+    <button class="btn btn-primary full-width" onclick="loadProfessionals()">Apply Filters</button>
+  </aside>
+
+  <section id="pro-list" class="job-list">
+    <p class="loading">Loading professionals…</p>
+  </section>
+</div>
+
+<script>
+async function loadProfessionals() {
+  const skill       = encodeURIComponent(document.getElementById('f-skill').value);
+  const availability = encodeURIComponent(document.getElementById('f-availability').value);
+  const minExp      = document.getElementById('f-min-exp').value;
+  const maxRate     = document.getElementById('f-max-rate').value;
+
+  let url = '/api/professionals/?';
+  if (skill)        url += `&skill=${skill}`;
+  if (availability) url += `&availability=${availability}`;
+  if (minExp)       url += `&min_experience=${minExp}`;
+  if (maxRate)      url += `&max_rate=${maxRate}`;
+
+  const list = document.getElementById('pro-list');
+  list.innerHTML = '<p class="loading">Loading…</p>';
+  try {
+    const pros = await fetch(url).then(r => r.json());
+    if (!pros.length) { list.innerHTML = '<p class="empty">No professionals found.</p>'; return; }
+    list.innerHTML = pros.map(renderPro).join('');
+  } catch {
+    list.innerHTML = '<p class="error-msg">Failed to load professionals.</p>';
+  }
+}
+
+function renderPro(p) {
+  const scores = p.assessment_scores || {};
+  const scoreHtml = Object.entries(scores).map(([skill, score]) =>
+    `<span class="score-chip">${escHtml(skill)}: ${score}/100</span>`
+  ).join('');
+  const availClass = { available: 'badge-green', busy: 'badge-yellow', unavailable: 'badge-red' }[p.availability] || '';
+  return `
+  <div class="job-card">
+    <div class="job-card-header">
+      <div>
+        <h3 class="job-title">${escHtml(p.name)}</h3>
+        <span class="company-name">${escHtml(p.location || 'Location not specified')}</span>
+      </div>
+      <span class="badge ${availClass}">${escHtml(p.availability)}</span>
+    </div>
+    <p class="job-desc">${escHtml((p.bio || 'No bio provided.').slice(0, 200))}${(p.bio || '').length > 200 ? '…' : ''}</p>
+    <div class="job-meta">
+      <span>💰 $${p.hourly_rate}/hr</span>
+      <span>📅 ${p.experience_years} yr${p.experience_years !== 1 ? 's' : ''} experience</span>
+      ${p.skills.length ? `<span>🛠 ${p.skills.slice(0,4).map(escHtml).join(', ')}</span>` : ''}
+    </div>
+    ${scoreHtml ? `<div class="score-chips">${scoreHtml}</div>` : ''}
+    <div class="profile-links">
+      ${p.linkedin_url ? `<a href="${escHtml(p.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a>` : ''}
+      ${p.github_url ? `<a href="${escHtml(p.github_url)}" target="_blank" rel="noopener">GitHub</a>` : ''}
+    </div>
+  </div>`;
+}
+
+loadProfessionals();
+</script>
+{% endblock %}

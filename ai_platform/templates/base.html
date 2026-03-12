@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}TrainHire — AI Training Talent Platform{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">TrainHire</a>
+    <div class="nav-links">
+      <a href="/jobs">Browse Jobs</a>
+      <a href="/professionals">Find Talent</a>
+      <a href="/dashboard" id="nav-dashboard" style="display:none">Dashboard</a>
+      <span id="nav-auth">
+        <button class="btn btn-outline" onclick="openModal('login-modal')">Log In</button>
+        <button class="btn btn-primary" onclick="openModal('register-modal')">Sign Up</button>
+      </span>
+      <span id="nav-user" style="display:none">
+        <span id="nav-username"></span>
+        <button class="btn btn-outline" onclick="logout()">Log Out</button>
+      </span>
+    </div>
+  </nav>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal-backdrop" style="display:none">
+    <div class="modal">
+      <h2>Log In</h2>
+      <div id="login-error" class="error-msg" style="display:none"></div>
+      <label>Email
+        <input type="email" id="login-email" placeholder="you@example.com" />
+      </label>
+      <label>Password
+        <input type="password" id="login-password" placeholder="Password" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="login()">Log In</button>
+        <button class="btn btn-ghost" onclick="closeModal('login-modal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Modal -->
+  <div id="register-modal" class="modal-backdrop" style="display:none">
+    <div class="modal">
+      <h2>Create Account</h2>
+      <div id="register-error" class="error-msg" style="display:none"></div>
+      <label>I am a…
+        <select id="reg-role">
+          <option value="professional">Professional (AI trainer / annotator)</option>
+          <option value="company">Company (hiring AI trainers)</option>
+        </select>
+      </label>
+      <label>Name
+        <input type="text" id="reg-name" placeholder="Your name or company name" />
+      </label>
+      <label>Email
+        <input type="email" id="reg-email" placeholder="you@example.com" />
+      </label>
+      <label>Password
+        <input type="password" id="reg-password" placeholder="Password" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="register()">Create Account</button>
+        <button class="btn btn-ghost" onclick="closeModal('register-modal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

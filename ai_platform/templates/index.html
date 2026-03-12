@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}TrainHire — Hire AI Training Professionals{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <div class="hero-content">
+    <h1>The talent platform for <span class="highlight">AI model training</span></h1>
+    <p class="hero-sub">
+      Connect with vetted professionals for data annotation, RLHF feedback,
+      red teaming, model evaluation, and more — or find your next AI training project.
+    </p>
+    <div class="hero-cta">
+      <a href="/jobs" class="btn btn-primary btn-lg">Browse Jobs</a>
+      <a href="/professionals" class="btn btn-outline btn-lg">Find Talent</a>
+    </div>
+  </div>
+</section>
+
+<section class="stats-bar">
+  <div class="stat"><strong id="stat-jobs">—</strong><span>Open Jobs</span></div>
+  <div class="stat"><strong id="stat-professionals">—</strong><span>Professionals</span></div>
+  <div class="stat"><strong id="stat-companies">—</strong><span>Companies Hiring</span></div>
+</section>
+
+<section class="categories section">
+  <h2>AI Training Specializations</h2>
+  <div class="category-grid">
+    {% for cat in JOB_CATEGORIES %}
+    <a class="category-card" href="/jobs?category={{ cat | urlencode }}">
+      <span class="cat-icon">{{ loop.index % 5 + 1 }}</span>
+      <span>{{ cat }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="how-it-works section">
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Create your profile</h3>
+      <p>Professionals list skills and pass assessments. Companies describe their AI needs.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Post or find work</h3>
+      <p>Companies post AI training jobs. Professionals browse and apply in minutes.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Get matched & hired</h3>
+      <p>Our skill-based matching surfaces the best candidates. Review, interview, and hire.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+async function loadStats() {
+  const [jobs, professionals, companies] = await Promise.all([
+    fetch('/api/jobs/').then(r => r.json()),
+    fetch('/api/professionals/').then(r => r.json()),
+    fetch('/api/companies/').then(r => r.json()),
+  ]);
+  document.getElementById('stat-jobs').textContent = Array.isArray(jobs) ? jobs.length : '—';
+  document.getElementById('stat-professionals').textContent = Array.isArray(professionals) ? professionals.length : '—';
+  document.getElementById('stat-companies').textContent = Array.isArray(companies) ? companies.length : '—';
+}
+loadStats();
+</script>
+{% endblock %}
